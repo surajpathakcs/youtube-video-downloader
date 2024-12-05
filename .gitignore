@@ -1,0 +1,32 @@
+
+de modules
+/node_modules/
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Environment variables file
+.env
+
+# Tailwind build output
+/public/css/styles.css
+
+# npm package-lock
+/package-lock.json
+
+# Build directories
+/dist/
+/build/
+
+# IDE specific files
+.vscode/
+.idea/
+
+# Tailwind config and PostCSS output (optional, if you don’t want to commit the generated files)
+tailwind.config.js
+postcss.config.js
+
