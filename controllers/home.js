@@ -1,75 +1,56 @@
-const ytdl = require("ytdl-core");
-const fs = require("fs");
+const youtubeDl = require("youtube-dl-exec");
 const path = require("path");
-const { info } = require("console");
+const fs = require("fs");
 
 async function handleView(req, res) {
-  res.send("Hello World!");
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'))
 }
 
 async function handleDownloadRequest(req, res) {
   try {
-    const { url } = req.query; // Extract URL from request body
-    const checkValidity = await ytdl.validateURL(url);
-    if (!checkValidity) {
-      // Validate the URL
-      console.log("invalid url");
+    const { url, format } = req.body;
+
+    // Simple basic URL validation
+    if (!url || !url.includes('youtube.com')) {
       return res.status(400).json({ error: "Invalid YouTube URL" });
     }
 
-    // Fetch video info and log details
-    const videoInfo = await ytdl.getInfo(url);
-    console.log("Video Information:");
-    console.log("Title:", videoInfo.videoDetails.title);
-    console.log("Length:", videoInfo.videoDetails.lengthSeconds + " seconds");
-    console.log("View Count:", videoInfo.videoDetails.viewCount);
-    console.log("Uploaded by:", videoInfo.videoDetails.ownerChannelName);
+    // Ensure downloads directory exists
+    const downloadDir = path.join(__dirname, '..', 'downloads');
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir);
+    }
 
-    // Set response headers
-    const title = videoInfo.videoDetails.title
-      .replace(/[\/\\:*?"<>|]/g, "_") // Remove invalid filename characters
-      .substring(0, 255); // Limit filename length
+    // Fetch video info
+    const videoInfo = await youtubeDl(url, { dumpSingleJson: true });
 
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader("Content-Disposition", `attachment; filename="${encodeURIComponent(title)}.mp4"`);
+    // Sanitize filename
+    const sanitizedTitle = videoInfo.title
+      .replace(/[\/\\:*?"<>|]/g, "_")
+      .substring(0, 255);
 
-    // fs.createWriteStream(`video.mp4`)
-    const stream = ytdl(url, {
-      quality: "highest",
-      filter: "audioandvideo",
-      requestOptions: {
-        headers: {
-          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-          'Accept-Language': 'en-US,en;q=0.9',
-        }
-      }
+    // Prepare download options
+    const outputPath = path.join(downloadDir, `${sanitizedTitle}.%(ext)s`);
+    
+    // Download video
+    await youtubeDl(url, {
+      output: outputPath,
+      format: format || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4'
     });
 
-    stream.on("info", (info) => {
-      console.log("Format Selected : ", info.formats[0].qualityLabel);
-    });
-    stream.on("progress", (chunkLength, download, total) => {
-      const progress = (download / total) * 100;
-      console.log(`Progess : ${progress.toFixed(2)}%`);
-    });
-    stream.pipe(res);
+    // Find the downloaded file
+    const downloadedFiles = fs.readdirSync(downloadDir)
+      .filter(file => file.startsWith(sanitizedTitle));
 
-    stream.on("end", () => {
-      console.log("Video Downloaded Successfully");
+    res.json({
+      message: "Download successful",
+      filename: downloadedFiles[0] || `${sanitizedTitle}.mp4`,
+      path: path.join(downloadDir, downloadedFiles[0] || `${sanitizedTitle}.mp4`)
     });
 
-    console.log("reaches here too");
-
-    stream.on("error", (error) => {
-      console.log("Failed to Download");
-      res.status(500).json({ error: "Failed to download video" });
-    });
-    // res.download(outputFile, sanitizedTitle, (err) => {
-    //   if (err) console.error("Error sending file:", err);
-    // });
   } catch (error) {
-    console.error("Error during download:", error);
-    res.status(500).json({ error: "Failed to download video" });
+    console.error("Download error:", error);
+    res.status(500).json({ error: "Failed to download video", details: error.message });
   }
 }
 

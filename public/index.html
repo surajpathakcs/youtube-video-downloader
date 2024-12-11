@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>YouTube Video Downloader</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        input,
+        button {
+            margin: 10px 0;
+            padding: 10px;
+            width: 100%;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        #videoInfo {
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>YouTube Video Downloader</h1>
+    <form id="downloadForm">
+        <input type="text" id="videoUrl" placeholder="Enter YouTube URL" required>
+        <select id="formatSelect">
+            <option value="">Best Available Quality</option>
+            <option value="bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4">High Quality</option>
+            <option value="worst">Lowest Quality</option>
+        </select>
+        <button type="submit">Download Video</button>
+    </form>
+    <div id="videoInfo"></div>
+
+    <script>
+        document.getElementById('downloadForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const url = document.getElementById('videoUrl').value;
+            const format = document.getElementById('formatSelect').value;
+            const infoDiv = document.getElementById('videoInfo');
+            
+            infoDiv.innerHTML = 'Downloading... Please wait.';
+            
+            try {
+                const response = await fetch('/download', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ url, format })
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    infoDiv.innerHTML = `
+                        <h2>Download Complete</h2>
+                        <p>Filename: ${data.filename}</p>
+                        <p>Saved to: ${data.path}</p>
+                    `;
+                } else {
+                    infoDiv.innerHTML = `Error: ${data.error}`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                infoDiv.innerHTML = 'Failed to download video';
+            }
+        });
+    </script>
+</body>
+
+</html>
