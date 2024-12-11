@@ -1,80 +1,56 @@
 const youtubeDl = require("youtube-dl-exec");
-const {spawn} = require('child_process')
+const path = require("path");
+const fs = require("fs");
 
 async function handleView(req, res) {
-  res.send("Hello World!");
+  res.sendFile(path.join(__dirname, '..', 'public', 'index.html'))
 }
 
 async function handleDownloadRequest(req, res) {
   try {
-    const { url } = req.query; // Extract URL from request body
+    const { url, format } = req.body;
 
-    if (!url) {
-      // Validate the URL
-      console.log("invalid url");
+    // Simple basic URL validation
+    if (!url || !url.includes('youtube.com')) {
       return res.status(400).json({ error: "Invalid YouTube URL" });
     }
-    console.log(url);
 
-    // Fetch video info and log details
+    // Ensure downloads directory exists
+    const downloadDir = path.join(__dirname, '..', 'downloads');
+    if (!fs.existsSync(downloadDir)) {
+      fs.mkdirSync(downloadDir);
+    }
+
+    // Fetch video info
     const videoInfo = await youtubeDl(url, { dumpSingleJson: true });
-    const title = videoInfo.title || 'Default Title' // If it is coming from a request body
 
-    .replace(/[\/\\:*?"<>|]/g, "_") // Remove invalid filename characters
-    .substring(0, 255); // Limit filename length
+    // Sanitize filename
+    const sanitizedTitle = videoInfo.title
+      .replace(/[\/\\:*?"<>|]/g, "_")
+      .substring(0, 255);
+
+    // Prepare download options
+    const outputPath = path.join(downloadDir, `${sanitizedTitle}.%(ext)s`);
     
-    console.log(`${title}`);
-
-     // Set headers for download
-     res.setHeader("Content-Disposition", `attachment; filename="video.mp4"`);
-     res.setHeader("Content-Type", "video/mp4");
-
-
-     // Use spawn to execute youtube-dl command manually
-    const ytdlProcess = spawn("youtube-dl", [
-      url,
-      "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4", // Select best video and audio
-      "-o", "-", // Output to stdout
-    ]);
-
-    // Pipe the stdout stream from the child process to the response
-    ytdlProcess.stdout.pipe(res);
-
-    // Handle any errors in the process
-    ytdlProcess.on("error", (error) => {
-      console.error("Stream Error:", error);
-      res.status(500).json({ error: "Error during video streaming" });
+    // Download video
+    await youtubeDl(url, {
+      output: outputPath,
+      format: format || 'bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4'
     });
 
-    // Handle the stderr if any errors occur during youtube-dl execution
-    ytdlProcess.stderr.on("data", (data) => {
-      console.error(`stderr: ${data}`);
+    // Find the downloaded file
+    const downloadedFiles = fs.readdirSync(downloadDir)
+      .filter(file => file.startsWith(sanitizedTitle));
+
+    res.json({
+      message: "Download successful",
+      filename: downloadedFiles[0] || `${sanitizedTitle}.mp4`,
+      path: path.join(downloadDir, downloadedFiles[0] || `${sanitizedTitle}.mp4`)
     });
-
-
-
-  //    // Use youtube-dl to stream video
-  //    const stream = youtubeDl(url, {
-  //     format: "bestvideo[ext=mp4]+bestaudio[ext=m4a]/mp4", // Select the best format
-  //     output: "-", // Output to stdout
-  //   });
-
-  //   // Pipe the stream to the response
-  //   stream.stdout.pipe(res); // Use the stdout stream for piping the video to the response
-
-
-  // stream.on("error", (error) => {
-  //     console.error("Stream Error:", error);
-  //     res.status(500).json({ error: "Error during video streaming" });
-  // });
-
-
-
-
 
   } catch (error) {
-    console.error("Error during download:", error);
-    res.status(500).json({ error: "Failed to download video" });
+    console.error("Download error:", error);
+    res.status(500).json({ error: "Failed to download video", details: error.message });
   }
 }
 
